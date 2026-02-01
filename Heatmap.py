@@ -9,7 +9,7 @@ from skimage.transform import rotate
 from skimage.color import rgb2gray
 
 ## Define input and output paths
-file_path = Path(r"C:\Users\User\Downloads\Documents\School\Research\Run4-07-24-2024-1000f-Firewire\Firewire-Polarized")
+file_path = Path(r"C:\Users\User\Downloads\Documents\School\Research\Run2-07-27-340f-IP-FW\W-Polarizer")
 output_path = Path(r"C:\Users\User\Downloads\Documents\School\Research\Results")
 output_path.mkdir(parents=True, exist_ok=True)
 
@@ -73,8 +73,6 @@ if __name__ == "__main__":
         key=sort_input
     )
 
-    image_name = images[0].stem # Base name for output files
-
     # Initialize variables for animation
     frames = []
     sum_image = None
@@ -98,9 +96,9 @@ if __name__ == "__main__":
     avg_image = sum_image / count
 
     # Name the output files 
-    video_file = output_dir / f"Heatmap_{image_name}.mp4"
-    avg_file = output_dir / f"Average_{image_name}.png"
-    avg_csv_file = output_dir / f"Average_{image_name}.csv"
+    video_file = output_dir / f"Heatmap_{run_name}.mp4"
+    avg_file = output_dir / f"Average_{run_name}.png"
+    avg_csv_file = output_dir / f"Average_{run_name}.csv"
     
     # Create and save animation
     h, w = frames[0].shape
