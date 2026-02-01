@@ -1,184 +1,139 @@
-from __future__ import division, unicode_literals, print_function  # for compatibility with Python 2 and 3
-
-import matplotlib as mpl
-import matplotlib.pyplot as plt
+## Import necessary libraries
+from pathlib import Path
 import numpy as np
-import pandas as pd
-from pandas import DataFrame, Series  # for convenience
-import skimage
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+import re
 from skimage import io
-
 from skimage.transform import rotate
-import pims
+from skimage.color import rgb2gray
 
-imagePath = pims.ImageSequence('Polarized/*.jpg')
-resultsFolder = "4Pin-polarized.ihm.jpg/"
-if (not os.path.exists(resultsFolder)):
-    os.makedirs(resultsFolder)
+## Define input and output paths
+file_path = Path(r"C:\Users\User\Downloads\Documents\School\Research\Run4-07-24-2024-1000f-Firewire\Firewire-Polarized")
+output_path = Path(r"C:\Users\User\Downloads\Documents\School\Research\Results")
+output_path.mkdir(parents=True, exist_ok=True)
 
-croppedPath4p = pims.ImageSequence('Results/Pol-Crop-4p/*.jpg')
-croppedPath1p = pims.ImageSequence('Results/Pol-Crop-1p/*.jpg')
-croppedPath2pAB = pims.ImageSequence('Results/Pol-Crop-2pAB/*.jpg')
+## Configuration parameters
+rotate_deg = 0
+crop_rows = None   # replace with: slice(start_row, end_row)
+crop_cols = None   # replace with: slice(start_col, end_col)
+threshold = 0  # pixel intensity threshold (0-255); 0 means no thresholding
+framerate = 30
 
-croppedPath4p = pims.ImageSequence('Results/Pol-Crop-4p/*.jpg')
-croppedPath1p = pims.ImageSequence('Results/Pol-Crop-1p/*.jpg')
-croppedPath2pAB = pims.ImageSequence('Results/Pol-Crop-2pAB/*.jpg')
+## Define helper functions
+def sort_input(file_name):
+    '''Sorts input files in numerical order'''
+    nums = re.findall(r"\d+", file_name.stem)
+    return int(nums[-1]) if nums else 1000000
 
-image = io.imread("Results/Pol-Crop-2pAB/Cropped2pinAB-1.jpg")
-ax = plt.hist(image.ravel(), bins = 256)
-plt.show()
-image = io.imread("Results/Pol-Crop-4p/Cropped4pin-1.jpg")
-plt.imshow(image, cmap=plt.cm.gray)
-plt.show()
-training = io.imread("08-11/Run2-08-11-375f-4P-Mixed/FireWire-Polarized/Image1.jpg")
-thres = 150
-new = training > thres
-training = training*new
-plt.imshow(training, cmap=plt.cm.gray)
-plt.show()
-io.imsave("Results/training.jpg", training)
+def grayscale_image(image_path):
+    '''Read and convert image to grayscale'''
+    img = io.imread(str(image_path))
+    if img.ndim == 3:
+        img = rgb2gray(img) # Convert RGB to grayscale from 0 to 1
+        img = (img * 255).astype(np.uint8) # Convert to 0-255 uint8
+    else:
+        img = img.astype(np.uint8)
+    return img
 
-#55 for 4p
-#150 option 1 for 2pAB
+def process_image(image):
+    '''Process image: rotate, crop, threshold'''
+    if rotate_deg != 0:
+        image = rotate(
+            image,
+            rotate_deg,
+            resize=False,
+            preserve_range=True
+        ).astype(np.uint8)
 
-##Read an initial image from the dataset
-img = io.imread("/work/Data/08-11 Unpol-1p/Image1.jpg")
-##Rotate the image to get the experiment straight (no angle)
-#trans = rotate(img, 1)
-##Crop the image to remove apparatus from data|
-##When cropping, the saved image may have wider margins, so may need to crop a little extra
-trans = img[52:-50, :]
+    if crop_rows is not None:
+        image = image[crop_rows, :]
 
-io.imsave("/work/Data/08-11 Unpol-1p/training.jpg", trans)
-#Display for confirmation
-fig, axes = plt.subplots(nrows=2, ncols=2, sharex=True, sharey=True,
-                         figsize=(8, 8))
-ax = axes.ravel()
+    if crop_cols is not None:
+        image = image[:, crop_cols]
 
-ax[0].imshow(img)
-ax[0].set_title('Original image')
+    if threshold > 0:
+        mask = image > threshold
+        image = (image * mask).astype(np.uint8)
 
-ax[1].imshow(trans)
-ax[1].set_title('Transformed')
+    return image
 
-#ax[2].imshow(img2, cmap=plt.cm.gray)
-#ax[2].set_title('Cropped')
+## Main execution block
+if __name__ == "__main__":
 
-#To apply plasma filter, use cmap=plt.cm.plasma
-#Can change coloring of heatmap by changing ending
-#ax[3].imshow(img2, cmap=plt.cm.plasma)
-#ax[3].set_title('Colored')
+    # Prepare output directory
+    run_name = file_path.parts[-2]
+    output_dir = output_path / run_name
+    output_dir.mkdir(exist_ok=True)
 
+    # Gather and sort image files
+    extensions = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp"}
+    images = sorted(
+        [f for f in file_path.iterdir() if f.suffix.lower() in extensions],
+        key=sort_input
+    )
 
+    image_name = images[0].stem # Base name for output files
 
-for a in ax:
-    a.axis('off')
+    # Initialize variables for animation
+    frames = []
+    sum_image = None
+    count = 0
+    print("Initialized. Processing images...")
 
-plt.tight_layout()
-plt.show()
+    # Process each image
+    for i in images:
+        img = grayscale_image(i)
+        img = process_image(img)
 
-a = 0
-i = 1
-thres = 155
-while a < 172:
-    training = io.imread("Results/Pol-Crop-1p/Cropped1pin-"+str(i)+".jpg")
-    thres = 155
-    new = training > thres
-    training = training*new
-    io.imsave("Results/Pol-Crop-1p-T/Cropped1pin-T-"+str(i)+".jpg", training)
-    a = a + 1
-    i = i + 1
-#4pin run: -2 degrees, 350:-650, thres = 55
-#1pin run: 1 degrees, 300:-570, thres = 155 (not very good)
-#2pinAB run: 1 degrees, 300:-570, thres = 155 (not very good)
+        if sum_image is None:
+            sum_image = np.zeros(img.shape, dtype=np.float64)
 
-croppedPath4pT = pims.ImageSequence('Results/Pol-Crop-4p-T/*.jpg')
-#Get that specific pixel of all the images (making a 2D array). Exclude non-existing images
-vals4pT = np.array(croppedPath4pT);
-avg4pT = np.mean(vals4pT, axis=0);
+        frames.append(img)
+        sum_image += img.astype(np.float64)
+        count += 1
+        print(f"Processed image: {i.name}")
 
-big = np.amax(croppedPath4pT)
-print(big)
+    # Compute average image
+    avg_image = sum_image / count
 
-fig, axes = plt.subplots(nrows=2, ncols=2, sharex=True, sharey=True,
-                         figsize=(8, 8))
-ax = axes.ravel()
+    # Name the output files 
+    video_file = output_dir / f"Heatmap_{image_name}.mp4"
+    avg_file = output_dir / f"Average_{image_name}.png"
+    avg_csv_file = output_dir / f"Average_{image_name}.csv"
+    
+    # Create and save animation
+    h, w = frames[0].shape
+    dpi = 100
+    fig = plt.figure(figsize=(w / dpi, h / dpi), dpi=dpi)
+    ax = plt.axes([0, 0, 1, 1])
+    ax.axis("off")
+    im = ax.imshow(frames[0], cmap="plasma")
 
-ax[0].imshow(avg4p, cmap=plt.cm.plasma)
-ax[0].set_title('Original image')
+    def update(i): # update function for animation
+        im.set_array(frames[i])
+        print(f"Rendering frame {i + 1} / {len(frames)}")
+        return [im]
 
-ax[1].imshow(avg4pT, cmap=plt.cm.plasma)
-ax[1].set_title('Transformed')
-for a in ax:
-    a.axis('off')
+    ani = animation.FuncAnimation(
+        fig, update, frames=len(frames),
+        interval=1000 / framerate, blit=True
+    )
 
-plt.tight_layout()
-plt.show()
+    writer = animation.FFMpegWriter(fps=framerate)
+    ani.save(str(video_file), writer=writer)
+    plt.close(fig)
 
-croppedPath2pABT = pims.ImageSequence('Results/Pol-Crop-2pAB-T/*.jpg')
-#Get that specific pixel of all the images (making a 2D array). Exclude non-existing images
-vals2pABT = np.array(croppedPath2pABT);
-avg2pABT = np.mean(vals2pABT, axis=0);
-
-croppedPath1pT = pims.ImageSequence('Results/Pol-Crop-1p-T/*.jpg')
-#Get that specific pixel of all the images (making a 2D array). Exclude non-existing images
-vals1pT = np.array(croppedPath1pT);
-avg1pT = np.mean(vals1pT, axis=0);
-
-croppedPath4pT = pims.ImageSequence('Results/Pol-Crop-4p-T-2/*.jpg')
-#Get that specific pixel of all the images (making a 2D array). Exclude non-existing images
-vals4pT = np.array(croppedPath4pT);
-avg4pT = np.mean(vals4pT, axis=0);
-
-big = np.amax(croppedPath2pABT)
-
-
-fig, axes = plt.subplots(nrows=1, ncols=3, sharex=True, sharey=True,
-                         figsize=(8, 8))
-ax = axes.ravel()
+    # Save average image as PNG
+    fig = plt.figure(figsize=(w / dpi, h / dpi), dpi=dpi)
+    ax = plt.axes([0, 0, 1, 1])
+    ax.axis("off")
+    ax.imshow(avg_image, cmap="plasma", aspect="auto")
+    plt.savefig(avg_file, dpi=dpi, bbox_inches="tight", pad_inches=0)
+    plt.close(fig)
 
 
-ax[0].imshow(avg2pABT, cmap=plt.cm.plasma)
-ax[0].set_title('2 pin Transformed')
+    # Save average image as CSV
+    np.savetxt(str(avg_csv_file), avg_image, delimiter=",")
 
-ax[1].imshow(avg1pT, cmap=plt.cm.plasma)
-ax[1].set_title('1 pin Transformed')
-
-ax[2].imshow(avg4pT, cmap=plt.cm.plasma)
-ax[2].set_title('4 pin Transformed')
-for a in ax:
-    a.axis('off')
-
-plt.tight_layout()
-plt.show()
-
-a = 0
-i = 1
-thres = 1
-while a < 603:
-    training = io.imread("08-11/Run2-08-11-603f-4P-Mixed/FireWire-Polarized/Image"+str(i)+".jpg")
-    trans = rotate(training, 1)
-    #Crop the image to remove apparatus from data
-    #When cropping, the saved image may have wider margins, so may need to crop a little extra
-    img2 = trans[:, 300:-570]
-    io.imsave("Results/Pol-Crop-4p-3/Cropped4pin-3-"+str(i)+".jpg", img2)
-    a = a + 1
-    i = i + 1
-#4pin run: -2 degrees, 350:-650, thres = 55
-#1pin run: 1 degrees, 300:-570
-#2pinAB run: 1 degrees, 300:-570, thres = 155
-
-a = 0
-i = 1
-thres = 1
-while a < 603:
-    training = io.imread("Results/Pol-Crop-4p-3/Cropped4pin-3-"+str(i)+".jpg")
-    thres = 155
-    new = training > thres
-    training = training*new
-    io.imsave("Results/Pol-Crop-4p-T-3/Cropped4pin-T3-"+str(i)+".jpg", training)
-    a = a + 1
-    i = i + 1
-#4pin run: -2 degrees, 350:-650, thres = 55
-#1pin run: 1 degrees, 300:-570
-#2pinAB run: 1 degrees, 300:-570, thres = 155
+    print("Files saved")
